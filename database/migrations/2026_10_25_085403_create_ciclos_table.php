@@ -6,20 +6,18 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('ciclos', function (Blueprint $table) {
             $table->id();
+            $table->string('nombre', 50); // Ej: Ciclo 02-2026
+            $table->date('fecha_inicio');
+            $table->date('fecha_fin');
+            $table->boolean('activo')->default(true);
             $table->timestamps();
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('ciclos');
