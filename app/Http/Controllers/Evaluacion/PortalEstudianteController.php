@@ -3,18 +3,19 @@
 namespace App\Http\Controllers\Evaluacion;
 
 use App\Http\Controllers\Controller;
-use App\Models\Curso;
+use Illuminate\Contracts\View\View;
 
 class PortalEstudianteController extends Controller
 {
-    public function index()
+    public function index(): View
     {
         $usuario = auth()->user();
-        $cursos = Curso::query()
-            ->whereIn('id', $usuario->cursosInscritos()->select('cursos.id'))
+
+        $cursos = $usuario->cursosInscritos()
             ->with([
                 'asignaciones.notas' => fn ($query) => $query->where('estudiante_id', auth()->id()),
             ])
+            ->orderBy('nombre')
             ->get();
 
         foreach ($cursos as $curso) {
@@ -29,6 +30,9 @@ class PortalEstudianteController extends Controller
             $curso->promedio_acumulado = round($promedio, 2);
         }
 
-        return view('evaluacion.estudiante.boleta', compact('cursos'));
+        return view('evaluacion.estudiante.boleta', [
+            'cursos' => $cursos,
+            'tieneCursosInscritos' => $cursos->isNotEmpty(),
+        ]);
     }
 }

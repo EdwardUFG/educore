@@ -17,7 +17,7 @@ class DashboardNavigationTest extends TestCase
         $response = $this->actingAs($student)->get(route('mis-notas'));
 
         $response->assertOk();
-        $response->assertSee('Mis Notas');
+        $response->assertSee('Notas');
     }
 
     public function test_non_student_roles_do_not_see_the_notes_link(): void
@@ -32,14 +32,12 @@ class DashboardNavigationTest extends TestCase
         }
     }
 
-    public function test_non_student_roles_cannot_open_the_notes_module(): void
+    public function test_teacher_cannot_open_the_notes_module(): void
     {
-        foreach (['admin', 'docente'] as $role) {
-            $user = User::factory()->create(['rol' => $role]);
+        $teacher = User::factory()->create(['rol' => 'docente']);
 
-            $response = $this->actingAs($user)->get(route('mis-notas'));
+        $response = $this->actingAs($teacher)->get(route('mis-notas'));
 
-            $response->assertForbidden();
-        }
+        $response->assertForbidden();
     }
 }

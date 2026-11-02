@@ -59,7 +59,8 @@
                     </article>
                 @empty
                     <div class="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center md:col-span-2">
-                        <p class="text-sm font-medium text-slate-700">No tienes cursos inscritos.</p>
+                        <p class="text-sm font-medium text-slate-700">Inscribe materias primero para consultar tus notas y actividades.</p>
+                        <a href="{{ route('academico.inscripciones.index') }}" class="mt-4 inline-flex rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700">Inscribir Materias</a>
                     </div>
                 @endforelse
             </div>
