@@ -5,107 +5,79 @@ namespace App\Http\Controllers\Academico;
 use App\Http\Controllers\Controller;
 use App\Models\Curso;
 use App\Models\User;
+use Illuminate\Contracts\View\View;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class InscripcionController extends Controller
 {
-    /**
-     * Mostrar cursos y estudiantes disponibles.
-     */
-    public function index()
+    public function index(Request $request): View
     {
-        $cursos = Curso::with(['carrera', 'ciclo', 'docente'])
-            ->withCount('estudiantes')
+        $usuario = $request->user();
+
+        if ($usuario->rol === 'admin') {
+            $cursos = Curso::query()
+                ->with(['carrera', 'ciclo', 'docente', 'estudiantes'])
+                ->withCount('estudiantes')
+                ->orderBy('nombre')
+                ->get();
+
+            $estudiantes = User::query()
+                ->where('rol', 'estudiante')
+                ->orderBy('name')
+                ->get();
+
+            return view('academico.inscripciones.index', compact('cursos', 'estudiantes'));
+        }
+
+        $cursos = Curso::query()
+            ->whereDoesntHave('estudiantes', fn ($query) => $query->whereKey($usuario->id))
+            ->with(['carrera', 'ciclo', 'docente'])
             ->orderBy('nombre')
             ->get();
 
-        $estudiantes = User::where('rol', 'estudiante')
-            ->orderBy('name')
-            ->get();
-
-        $cursoSeleccionado = request()->query('curso');
-
-        return view('academico.inscripciones.index', compact(
-            'cursos',
-            'estudiantes',
-            'cursoSeleccionado'
-        ));
+        return view('academico.inscripciones.index', compact('cursos'));
     }
 
-    /**
-     * Inscribir un estudiante en un curso.
-     */
-    public function store(Request $request)
+    public function store(Request $request): RedirectResponse
     {
-        $datos = $request->validate([
-            'curso_id' => [
+        $usuario = $request->user();
+        $rules = [
+            'curso_id' => ['required', 'integer', 'exists:cursos,id'],
+        ];
+
+        if ($usuario->rol === 'admin') {
+            $rules['estudiante_id'] = [
                 'required',
-                'exists:cursos,id',
-            ],
-            'estudiante_id' => [
-                'required',
+                'integer',
                 Rule::exists('users', 'id')->where(
                     fn ($query) => $query->where('rol', 'estudiante')
                 ),
-            ],
-        ]);
-
-        $curso = Curso::findOrFail($datos['curso_id']);
-
-        // Evitar inscripciones duplicadas.
-        $yaInscrito = $curso->estudiantes()
-            ->where('users.id', $datos['estudiante_id'])
-            ->exists();
-
-        if ($yaInscrito) {
-            return back()
-                ->withErrors([
-                    'estudiante_id' =>
-                        'Este estudiante ya está inscrito en el curso.',
-                ])
-                ->withInput();
+            ];
         }
 
-        // Registrar la inscripción.
-        $curso->estudiantes()->attach($datos['estudiante_id']);
+        $datos = $request->validate($rules);
+        $estudiante = $usuario->rol === 'admin'
+            ? User::query()->where('rol', 'estudiante')->findOrFail($datos['estudiante_id'])
+            : $usuario;
+        $curso = Curso::query()->findOrFail($datos['curso_id']);
+
+        $curso->estudiantes()->syncWithoutDetaching([$estudiante->id]);
 
         return redirect()
-            ->route('academico.inscripciones.index', [
-                'curso' => $curso->id,
-            ])
-            ->with('success', 'Estudiante inscrito correctamente.');
+            ->route('academico.inscripciones.index')
+            ->with('success', 'Inscripción registrada correctamente.');
     }
 
-    /**
-     * Retirar un estudiante de un curso.
-     */
-    public function destroy(Curso $curso, User $estudiante)
+    public function destroy(Curso $curso, User $estudiante): RedirectResponse
     {
-        // Comprobar que el usuario tenga rol de estudiante.
-        if ($estudiante->rol !== 'estudiante') {
-            abort(404);
-        }
+        abort_unless($estudiante->rol === 'estudiante', 404);
 
-        // Verificar que esté inscrito en el curso.
-        $inscrito = $curso->estudiantes()
-            ->where('users.id', $estudiante->id)
-            ->exists();
-
-        if (! $inscrito) {
-            return back()->withErrors([
-                'estudiante' =>
-                    'El estudiante no está inscrito en este curso.',
-            ]);
-        }
-
-        // Eliminar la inscripción sin borrar al estudiante.
         $curso->estudiantes()->detach($estudiante->id);
 
         return redirect()
-            ->route('academico.inscripciones.index', [
-                'curso' => $curso->id,
-            ])
-            ->with('success', 'Estudiante retirado del curso correctamente.');
+            ->route('academico.inscripciones.index')
+            ->with('success', 'Inscripción retirada correctamente.');
     }
 }
