@@ -7,162 +7,106 @@ use App\Models\Carrera;
 use App\Models\Ciclo;
 use App\Models\Curso;
 use App\Models\User;
+use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class CursoController extends Controller
 {
-    /**
-     * Mostrar todos los cursos.
-     */
-    public function index()
+    public function index(): View
     {
-        $cursos = Curso::with(['carrera', 'ciclo', 'docente'])
+        $cursos = Curso::query()
+            ->with(['carrera', 'ciclo', 'docente'])
             ->orderBy('nombre')
             ->paginate(10);
 
         return view('academico.cursos.index', compact('cursos'));
     }
 
-    /**
-     * Formulario para crear un curso.
-     */
-    public function create()
+    public function create(): View
     {
-        $carreras = Carrera::where('activa', true)
-            ->orderBy('nombre')
-            ->get();
-
-        $ciclos = Ciclo::where('activo', true)
-            ->orderByDesc('fecha_inicio')
-            ->get();
-
-        $docentes = User::where('rol', 'docente')
-            ->orderBy('name')
-            ->get();
-
-        return view('academico.cursos.create', compact(
-            'carreras',
-            'ciclos',
-            'docentes'
-        ));
+        return view('academico.cursos.create', $this->formOptions());
     }
 
-    /**
-     * Guardar un nuevo curso.
-     */
-    public function store(Request $request)
+    public function store(Request $request): RedirectResponse
     {
-        $datos = $request->validate([
-            'codigo' => [
-                'required',
-                'string',
-                'max:20',
-                'unique:cursos,codigo',
-            ],
-            'nombre' => ['required', 'string', 'max:255'],
-            'descripcion' => ['nullable', 'string'],
-            'carrera_id' => [
-                'required',
-                'exists:carreras,id',
-            ],
-            'ciclo_id' => [
-                'required',
-                'exists:ciclos,id',
-            ],
-            'docente_id' => [
-                'required',
-                Rule::exists('users', 'id')
-                    ->where(fn ($query) =>
-                        $query->where('rol', 'docente')
-                    ),
-            ],
-        ]);
-
-        $curso = Curso::create($datos);
+        $curso = Curso::query()->create($this->validatedData($request));
 
         return redirect()
             ->route('academico.cursos.show', $curso)
-            ->with('success', 'Curso creado correctamente.');
+            ->with('success', 'Materia creada correctamente.');
     }
 
-    /**
-     * Mostrar los detalles de un curso.
-     */
-    public function show(Curso $curso)
+    public function show(Curso $curso): View
     {
-        $curso->load([
-            'carrera',
-            'ciclo',
-            'docente',
-            'estudiantes',
-        ]);
+        $curso->load(['carrera', 'ciclo', 'docente', 'estudiantes']);
 
         return view('academico.cursos.show', compact('curso'));
     }
 
-    /**
-     * Formulario para editar un curso.
-     */
-    public function edit(Curso $curso)
+    public function edit(Curso $curso): View
     {
-        $carreras = Carrera::orderBy('nombre')->get();
-        $ciclos = Ciclo::orderByDesc('fecha_inicio')->get();
-
-        $docentes = User::where('rol', 'docente')
-            ->orderBy('name')
-            ->get();
-
-        return view('academico.cursos.edit', compact(
-            'curso',
-            'carreras',
-            'ciclos',
-            'docentes'
-        ));
+        return view('academico.cursos.edit', [
+            ...$this->formOptions(),
+            'curso' => $curso,
+        ]);
     }
 
-    /**
-     * Actualizar un curso.
-     */
-    public function update(Request $request, Curso $curso)
+    public function update(Request $request, Curso $curso): RedirectResponse
     {
-        $datos = $request->validate([
-            'codigo' => [
-                'required',
-                'string',
-                'max:20',
-                Rule::unique('cursos', 'codigo')
-                    ->ignore($curso->id),
-            ],
-            'nombre' => ['required', 'string', 'max:255'],
-            'descripcion' => ['nullable', 'string'],
-            'carrera_id' => ['required', 'exists:carreras,id'],
-            'ciclo_id' => ['required', 'exists:ciclos,id'],
-            'docente_id' => [
-                'required',
-                Rule::exists('users', 'id')
-                    ->where(fn ($query) =>
-                        $query->where('rol', 'docente')
-                    ),
-            ],
-        ]);
-
-        $curso->update($datos);
+        $curso->update($this->validatedData($request, $curso));
 
         return redirect()
             ->route('academico.cursos.index')
-            ->with('success', 'Curso actualizado correctamente.');
+            ->with('success', 'Materia actualizada correctamente.');
     }
 
-    /**
-     * Eliminar un curso.
-     */
-    public function destroy(Curso $curso)
+    public function destroy(Curso $curso): RedirectResponse
     {
         $curso->delete();
 
         return redirect()
             ->route('academico.cursos.index')
-            ->with('success', 'Curso eliminado correctamente.');
+            ->with('success', 'Materia eliminada correctamente.');
+    }
+
+    /**
+     * @return array{carreras: Collection, ciclos: Collection, docentes: Collection}
+     */
+    private function formOptions(): array
+    {
+        return [
+            'carreras' => Carrera::query()->where('activa', true)->orderBy('nombre')->get(),
+            'ciclos' => Ciclo::query()->where('activo', true)->orderByDesc('fecha_inicio')->get(),
+            'docentes' => User::query()->where('rol', 'docente')->orderBy('name')->get(),
+        ];
+    }
+
+    /**
+     * @return array{codigo: string, nombre: string, descripcion: ?string, carrera_id: int, ciclo_id: int, docente_id: int}
+     */
+    private function validatedData(Request $request, ?Curso $curso = null): array
+    {
+        return $request->validate([
+            'codigo' => [
+                'required',
+                'string',
+                'max:20',
+                Rule::unique('cursos', 'codigo')->ignore($curso?->id),
+            ],
+            'nombre' => ['required', 'string', 'max:255'],
+            'descripcion' => ['nullable', 'string'],
+            'carrera_id' => ['required', 'integer', 'exists:carreras,id'],
+            'ciclo_id' => ['required', 'integer', 'exists:ciclos,id'],
+            'docente_id' => [
+                'required',
+                'integer',
+                Rule::exists('users', 'id')->where(
+                    fn ($query) => $query->where('rol', 'docente')
+                ),
+            ],
+        ]);
     }
 }

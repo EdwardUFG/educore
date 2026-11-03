@@ -7,9 +7,21 @@ use App\Models\Carrera;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Contracts\View\View;
 
 class UsuarioController extends Controller
 {
+    public function adminIndex(): View
+    {
+        $usuarios = User::query()
+            ->with('carrera')
+            ->orderBy('rol')
+            ->orderBy('name')
+            ->paginate(20);
+
+        return view('admin.usuarios.index', compact('usuarios'));
+    }
+
     /**
      * Listar docentes y estudiantes con búsqueda y paginación.
      */
